@@ -14,9 +14,29 @@ El fallo seguro es que el vídeo no salga de la máquina. Enviarlo a un tercero 
 la bandera explícita `--remoto`. Un descuido no debe acabar en una subida no deseada.
 
 ### La clave nunca se imprime
-OpenRouter devuelve la clave dentro del cuerpo de algunos errores 401. Todo mensaje
-del servidor pasa por `sanear()` antes de mostrarse, que sustituye tanto la clave
-cargada como cualquier cadena con formato `sk-or-v1-…`.
+Todo mensaje del servidor pasa por `sanear()` antes de mostrarse, que sustituye tanto
+la clave cargada como cualquier cadena con formato `sk-or-v1-…`.
+
+El motivo no es hipotético: **hay proveedores que devuelven la clave dentro del cuerpo
+del error 401**, y ese cuerpo acaba en la pantalla, en los logs y —lo que más importa
+aquí— dentro del contexto del asistente que ejecuta la skill. Medido el 2026-08-23 con
+una clave falsa:
+
+| Proveedor | Cuerpo del 401 |
+|---|---|
+| OpenAI | Devuelve la clave enmascarada: `sk-CLAVE***…***LAVE` (8 primeros y 4 últimos) |
+| Groq | `Invalid API Key`. No devuelve nada |
+| OpenRouter | `User not found.` / `Missing Authentication header`. No devuelve nada |
+
+Con OpenRouter, que es el proveedor de esta skill, hoy no se reproduce el eco de la
+clave. `sanear()` se mantiene igualmente: no cuesta nada, el comportamiento del
+servidor puede cambiar sin avisar y basta con que un proveedor intermedio lo haga.
+
+> **Corrección.** Versiones anteriores de este archivo, del README y del post afirmaban
+> que OpenRouter devuelve la clave en el cuerpo de algunos 401. Esa frase entró en el
+> primer commit del proyecto, procedía de la fase de diseño y **no llegó a medirse**.
+> Al intentar reproducirla con clave bien formada, corta, malformada y con `Bearer`
+> duplicado, OpenRouter no devolvió la clave en ningún caso.
 
 La clave se lee de una variable de entorno o de `~/.config/openrouter/.env`, nunca
 del repositorio, nunca de la línea de comandos (aparecería en el historial del shell)

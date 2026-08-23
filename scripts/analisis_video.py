@@ -70,8 +70,11 @@ MIME_POR_EXTENSION = {
 def sanear(texto, secreto):
     """Sustituye el secreto por un marcador antes de imprimir nada.
 
-    OpenRouter devuelve la clave dentro del cuerpo de algunos errores 401,
-    así que todo mensaje del servidor pasa por aquí antes de verse.
+    Hay proveedores que devuelven la clave dentro del cuerpo del error 401
+    —OpenAI lo hace, enmascarada— y ese cuerpo acaba en pantalla, en los logs
+    y dentro del contexto del asistente. Con OpenRouter no se reproduce hoy
+    (medido el 2026-08-23), pero todo mensaje del servidor pasa por aquí:
+    no cuesta nada y el servidor puede cambiar sin avisar. Ver SECURITY.md.
     """
     if not texto:
         return texto
