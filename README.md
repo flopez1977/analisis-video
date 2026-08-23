@@ -71,9 +71,80 @@ chmod 600 ~/.config/openrouter/.env
 
 También vale exportar `OPENROUTER_API_KEY` como variable de entorno, que tiene prioridad.
 
-El coste se calcula con los precios que publica OpenRouter en ese momento, no con
-una constante escrita en el código. Antes de enviar verás una estimación, y si supera
-el umbral se te pide confirmación.
+El coste se calcula con los precios que publica OpenRouter en ese momento, no con una
+constante escrita en el código. Antes de enviar verás una estimación, y si supera el
+umbral se te pide confirmación. Las cifras reales están más arriba: entre medio céntimo
+y seis céntimos por vídeo.
+
+## Pruebas reales: qué saca y cuánto cuesta
+
+Cifras de ejecuciones reales sobre siete vídeos, no estimaciones.
+Modelo `google/gemini-3.7-flash`, modo `--remoto`, agosto de 2026.
+
+### Piezas cortas (un solo envío)
+
+| Vídeo | Dur. | Planos | Ritmo medio | Coste | Qué aporta como referencia |
+|---|---|---|---|---|---|
+| [Videos promocionales para restaurantes](https://www.youtube.com/watch?v=eVVfsLg--aA) | 0:12 | 10 | ~1,2 s/plano | **$0.0077** | Corte rapidísimo sobre una acción continua (preparar un cóctel). Cómo mantener continuidad narrativa con planos de un segundo |
+| [MONSTER ENERGY · Spot publicitario](https://www.youtube.com/watch?v=B0voMDz4pdg) | 0:13 | 7 | ~1,8 s/plano | **$0.0054** | B-roll de producto en clave baja: contraluz de neón, macro con bokeh extremo, cortes sincronizados con los golpes de la base musical |
+| [Vídeo promocional Grado Creativo](https://www.youtube.com/watch?v=sCnVUEAR5A0) | 0:39 | 16 | ~2,4 s/plano | **$0.0084** | Manifiesto con voz en off: cómo llevar una idea abstracta a imágenes y acelerar el montaje hacia el clímax |
+| [SPOT CAFÉ · Vídeo de producto](https://www.youtube.com/watch?v=df3JeXVWYWA) | 0:40 | 10 | 2-6 s/plano | **$0.0057** | Producto contado como proceso de principio a fin. Ritmo pausado, planos que respiran |
+| [Promo para agencias de viaje](https://www.youtube.com/watch?v=-JGanqjhYJk) | 0:51 | 31 | 1-2 s/plano | **$0.0148** | Montaje de gran densidad: dron, paisaje y gente encadenados a un plano por segundo |
+
+**Cinco piezas, 2 min 35 s: $0.042.** Menos de cinco céntimos.
+
+### Piezas largas (troceadas automáticamente)
+
+Por encima de 150 segundos el vídeo se parte en fragmentos de 120 s que se analizan
+por separado. Las marcas de tiempo del informe siguen siendo globales.
+
+| Vídeo | Dur. | Partes | Informe | Coste | Qué aporta como referencia |
+|---|---|---|---|---|---|
+| [8 CORTES y TRANSICIONES que todo editor debe conocer](https://www.youtube.com/watch?v=jK2adxWTiKY) | 8:26 | 5 | 734 líneas | **$0.0549** | Identificó y situó en el tiempo las técnicas que enseña: jump cut, corte invisible, match cut, J-cut, L-cut, cross dissolve y barrido |
+| [Cómo hacer vídeos más cinematográficos (5 pasos)](https://www.youtube.com/watch?v=zbQGDfyd2n4) | 9:41 | 5 | 772 líneas | **$0.0630** | Los cinco pasos con su explicación y los ejemplos visuales con que se ilustra cada uno |
+
+### Lo que enseñan estas cifras
+
+- **El coste lo marca el número de planos, no la duración.** La pieza de 51 s costó casi
+  el triple que la de 40 s porque tiene 31 planos que describir: se paga el informe de
+  salida, no el metraje de entrada.
+- **Comprimir no degrada el análisis.** El vídeo de Grado Creativo bajó de 21,1 MB a
+  12,2 MB para poder enviarse y aun así el informe identificó 16 planos con su óptica,
+  iluminación y transiciones.
+- **Da igual el contenedor.** El mismo vídeo en `.mkv` (3832x1808) y en `.mp4` dio
+  informes equivalentes por $0.0080 y $0.0084. No hace falta convertir nada a mp4.
+- **La estructura del desglose varía algo entre ejecuciones** (a veces `### Plano 1`, a
+  veces lista con negritas). El contenido es equivalente, pero no dependas del formato
+  exacto si vas a parsear la salida.
+
+### Modo local frente a modo remoto
+
+El mismo spot de Monster Energy (0:13) analizado de las dos maneras:
+
+| | Local (16 fotogramas) | Remoto |
+|---|---|---|
+| Paleta, iluminación, óptica | ✅ | ✅ |
+| Encuadre y composición | ✅ | ✅ |
+| Texto en pantalla | ✅ | ✅ |
+| Número de planos y ritmo | ❌ 16 fotogramas no revelan que haya 7 cortes | ✅ 7 planos, ~1,8 s/plano |
+| Movimiento de cámara | ❌ Una instantánea no tiene movimiento | ✅ |
+| Tipo de transición entre planos | ❌ | ✅ |
+| Música y efectos de sonido | ❌ No oye nada | ✅ Identificó el trap instrumental y el sonido de apertura de la lata |
+| Coste | Gratis | $0.0054 |
+
+**Si lo que te interesa es el montaje —cortes, transiciones, ritmo, sincronía con la
+música—, el modo local no te sirve: ve fotos, no vídeo.** El modo local es la opción
+correcta cuando el material no puede salir de tu máquina, o cuando lo que buscas es
+composición, color y contenido de plano.
+
+### Para qué sirve esto
+
+El caso de uso que motivó estas pruebas: **usar una pieza que funciona como referencia
+detallada para construir la tuya.** En vez de partir de cero, analizas un vídeo que te
+gusta y obtienes su arquitectura real —cuántos planos, de qué duración, con qué tipo de
+corte, qué hace la cámara, dónde está el clímax, cómo entra la música— y montas la tuya
+con tus propios clips siguiendo esa estructura. La referencia deja de ser "me gusta cómo
+queda" y pasa a ser una plantilla con números.
 
 ## Privacidad y datos personales
 
