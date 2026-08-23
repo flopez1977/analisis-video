@@ -178,6 +178,22 @@ Modelo `google/gemini-3.7-flash`, modo `--remoto`, agosto de 2026.
 
 **Cinco piezas, 2 min 35 s: $0.042.** Menos de cinco céntimos.
 
+### Prueba de esfuerzo
+
+Un videoclip comercial en 4K (3840x2160), contenedor `.mkv`, **199,8 MB** y 2:20 de
+duración, con acentos y paréntesis en el nombre del archivo:
+
+| Qué pasó | Resultado |
+|---|---|
+| Compresión para el envío | 199,8 MB → 13,0 MB (reducción de 15x) |
+| Planos detectados | 58, de 1 a 2,5 s, con corte a ritmo |
+| Estructura musical | Detectó el cambio a un interludio de piano jazz entre 01:31 y 01:39, y la vuelta a la percusión en 01:40 |
+| Efectos de sonido | Seis, situados con marca de tiempo |
+| Coste | **$0.0119** |
+
+Es el caso que más cosas junta a la vez —contenedor poco común, resolución máxima,
+archivo enorme y montaje muy rápido— y ninguna dio problema.
+
 ### Piezas largas (troceadas automáticamente)
 
 Por encima de 150 segundos el vídeo se parte en fragmentos de 120 s que se analizan
