@@ -18,6 +18,91 @@ El modo local es el predeterminado a propósito. Si el vídeo es de un cliente, 
 familia o simplemente no quieres que salga de tu ordenador, no tienes que acordarte
 de nada: no sale.
 
+## Cuándo usarla, y qué vas a sacar
+
+La pregunta que responde esta skill no es *"¿de qué va este vídeo?"* sino
+**"¿cómo está construido este vídeo?"**. Si lo que necesitas es lo primero, hay
+herramientas más simples; para lo segundo hacen falta ojos y oídos sobre el metraje
+continuo, que es lo que hace el modo remoto.
+
+### Casos en los que rinde
+
+**Convertir una referencia en una plantilla.** Es el caso que más aporta. Tienes un
+vídeo que te gusta y quieres hacer "algo así" con tus propios clips. En lugar de
+copiar de memoria, obtienes su arquitectura: cuántos planos, de qué duración, con
+qué tipo de corte se encadenan, qué hace la cámara en cada uno, dónde está el pico
+de intensidad y cómo entra la música. "Me gusta cómo queda" pasa a ser una lista de
+decisiones que puedes ejecutar.
+
+**Estudiar a la competencia a escala.** Una pieza corta cuesta menos de un céntimo.
+Analizar los veinte vídeos que mejor funcionan en el sector de un cliente cuesta
+menos que un café, y de ahí sale el patrón común: qué duración de plano manejan,
+si usan voz en off o solo música, cuánto tardan en enseñar el producto.
+
+**Exprimir un tutorial sin volver a verlo.** Un vídeo formativo de nueve minutos
+devuelve un documento consultable con cada técnica situada en su minuto exacto. Deja
+de ser un vídeo que hay que rebobinar y pasa a ser documentación.
+
+**Auditar una entrega.** Contrastar el vídeo que te devuelve un proveedor con el
+briefing: si pediste ritmo alto y el desglose dice planos de cinco segundos, ahí
+tienes el dato.
+
+**Accesibilidad y documentación.** Describir a fondo una pieza para alguien que no
+puede verla, o dejar constancia escrita de un montaje.
+
+### Casos en los que no
+
+- **No monta nada.** Describe lo que le das; no construye tu vídeo ni decide si una
+  referencia es buena para tu cliente. El criterio sigue siendo tuyo.
+- **No sustituye a verlo.** El informe es la lectura de un modelo, y no hay forma de
+  verificar desde fuera si "17 planos" son exactamente 17. Para decisiones que
+  importen, contrasta con el vídeo.
+- **En piezas largas no hay una lectura unificada.** Por encima de 150 segundos se
+  trocea, y cada parte se analiza sin saber qué ocurrió en las demás. Tienes el
+  detalle de todo el vídeo, pero no una interpretación global del conjunto.
+- **Las marcas de tiempo son aproximadas.** El modelo muestrea el vídeo; sirven para
+  localizar, no para conformar un EDL.
+
+### Cómo sacarle más partido
+
+1. **Empieza por lo corto.** Una pieza de 15-60 segundos da el informe más útil por
+   céntimo y es donde el desglose plano a plano resulta más fiable.
+2. **Analiza tres referencias del mismo género, no una.** El patrón aparece al
+   comparar; una sola pieza te da su solución particular, no la regla.
+3. **Pásale el informe a un asistente junto con tu material.** El flujo completo es
+   *analizar referencia → listar tus clips → pedir un guion de montaje que siga esa
+   arquitectura*. El informe es el puente entre "me gusta esto" y un plan de edición.
+4. **Guarda los informes.** Son ficheros Markdown pequeños: un archivo de referencias
+   analizadas se vuelve más útil cuanto más crece.
+5. **Si el vídeo es de cliente, usa el modo local** y asume que tendrás composición y
+   color, pero no montaje.
+
+## Comparación con otras herramientas
+
+La más parecida que hay en el ecosistema es
+**[claude-video](https://github.com/bradautomates/claude-video)** de bradautomates
+(MIT, skill de comunidad; el nombre despista, no es un proyecto oficial de Anthropic).
+Merece la pena tenerla: descarga con yt-dlp, extrae fotogramas y transcribe con
+Whisper cuando no hay subtítulos.
+
+Hacen cosas distintas y se complementan:
+
+| | claude-video | analisis-video |
+|---|---|---|
+| Qué entrega | Fotogramas y transcripción al asistente | Un informe estructurado del montaje |
+| Quién analiza | El asistente, mirando imágenes sueltas | Un modelo multimodal, viendo el vídeo continuo con audio |
+| Pregunta que responde | *¿Qué se dice y qué sale?* | *¿Cómo está construido?* |
+| Cortes, ritmo, transiciones | No: no están en un fotograma | Sí |
+| Movimiento de cámara | No | Sí |
+| Música y efectos de sonido | Transcribe voz, no describe el diseño sonoro | Sí |
+| Coste | Gratis (o el de Whisper) | Céntimos por vídeo |
+| Privacidad | Todo local | El vídeo sale de la máquina (salvo en modo local) |
+
+Regla rápida: **si te interesa el mensaje, claude-video; si te interesa la
+construcción, ésta.** El modo local de esta skill se parece mucho a lo que hace
+claude-video, y comparte sus límites: sin audio y sin continuidad no se puede analizar
+un montaje.
+
 ## Instalación
 
 ```bash
