@@ -4,7 +4,7 @@
 *.key
 *.pem
 
-# Bitácora interna: menciona rutas y proyectos de la agencia
+# Bitácora de trabajo local, no forma parte de la herramienta
 LOG.md
 
 # Material de trabajo y salidas
