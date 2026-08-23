@@ -18,6 +18,23 @@ El modo local es el predeterminado a propósito. Si el vídeo es de un cliente, 
 familia o simplemente no quieres que salga de tu ordenador, no tienes que acordarte
 de nada: no sale.
 
+## Dos cosas distintas que conviene no confundir
+
+**De dónde sale el vídeo** y **dónde se analiza** son independientes. Cualquier
+combinación de las cuatro es válida:
+
+| Le pasas | Con `--remoto` | Qué ocurre |
+|---|---|---|
+| Un archivo tuyo | no | Se extraen fotogramas con ffmpeg. **Cero tráfico de red.** |
+| Un enlace | no | Se descarga el vídeo y se extraen fotogramas. Lo único que sale de tu máquina es la petición de descarga. |
+| Un archivo tuyo | sí | El vídeo se envía a OpenRouter y al proveedor del modelo. |
+| Un enlace | sí | Se descarga y después se envía. |
+
+Dicho corto: **los enlaces funcionan siempre**, en los dos modos. Lo que decide
+`--remoto` no es de dónde viene el vídeo, sino quién lo analiza — tu máquina o un
+modelo externo.
+
+
 ## Cuándo usarla, y qué vas a sacar
 
 La pregunta que responde esta skill no es *"¿de qué va este vídeo?"* sino

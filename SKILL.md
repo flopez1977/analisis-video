@@ -24,6 +24,11 @@ una ruta local como una URL.
 | Coste | Cero. | Se paga por tokens. |
 | Continuidad | Ve instantes sueltos, no el movimiento entre ellos. | Ve el vídeo completo, con audio. |
 
+**Los enlaces funcionan en los dos modos.** El origen (archivo o URL) y el modo
+(local o remoto) son independientes: `--remoto` no decide de dónde viene el vídeo,
+sino quién lo analiza. Si el usuario pregunta si vale un enlace de YouTube, la
+respuesta es sí, en cualquiera de los dos modos.
+
 **Usa el modo local salvo que el usuario pida lo contrario.** Es el que vale para
 material de cliente, y no cuesta dinero.
 
