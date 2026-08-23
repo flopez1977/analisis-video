@@ -713,12 +713,65 @@ def analizar_remoto(ruta, destino_informe, modelo, clave, trabajo):
     return destino_informe
 
 
+def comprobar_entorno():
+    """Informa de qué falta para poder trabajar, sin instalar nada.
+
+    Se ejecuta antes de la primera vez para que nadie se estrelle a mitad de un
+    análisis. Nunca imprime el valor de la clave: solo si está o no.
+    """
+    sistema = "darwin" if sys.platform == "darwin" else "linux"
+    faltan = []
+    print("Comprobación del entorno para analisis-video\n")
+
+    for binario, para_que, imprescindible in (
+        ("ffmpeg", "extraer fotogramas y comprimir", True),
+        ("ffprobe", "leer la duración de los vídeos", True),
+        ("yt-dlp", "descargar vídeos desde un enlace", False),
+    ):
+        ruta = shutil.which(binario)
+        if ruta:
+            print(f"  [ok]    {binario:<8} {ruta}")
+        else:
+            etiqueta = "necesario" if imprescindible else "solo para analizar enlaces"
+            print(f"  [falta] {binario:<8} {etiqueta} — {para_que}")
+            faltan.append(binario)
+
+    hay_clave = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+    if not hay_clave and os.path.exists(ENV_PATH):
+        with open(ENV_PATH) as f:
+            hay_clave = any(l.strip().startswith("OPENROUTER_API_KEY=") and
+                            l.split("=", 1)[1].strip() for l in f)
+    if hay_clave:
+        print(f"  [ok]    clave    configurada (necesaria solo para --remoto)")
+    else:
+        print(f"  [falta] clave    solo para --remoto — créala en "
+              f"https://openrouter.ai/keys y guárdala en {ENV_PATH}")
+
+    print()
+    if faltan:
+        ordenes = {b: COMO_INSTALAR.get(b, {}).get(sistema, f"instala {b}") for b in faltan}
+        if sistema == "darwin" and set(faltan) <= {"ffmpeg", "ffprobe", "yt-dlp"}:
+            paquetes = sorted({"ffmpeg" if b in ("ffmpeg", "ffprobe") else b for b in faltan})
+            print(f"Para instalar lo que falta:  brew install {' '.join(paquetes)}")
+        else:
+            for binario, orden in ordenes.items():
+                print(f"Para instalar {binario}:  {orden}")
+        print("\nNo se instala nada automáticamente: la orden la ejecutas tú.")
+        return 1
+    print("Todo listo para el modo local." +
+          ("" if hay_clave else " Para el modo remoto falta la clave."))
+    return 0
+
+
 # --------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
         description="Analiza un vídeo local o por URL y genera un informe detallado.")
-    parser.add_argument("fuente", help="Ruta a un archivo de vídeo o URL")
+    parser.add_argument("fuente", nargs="?",
+                        help="Ruta a un archivo de vídeo o URL")
+    parser.add_argument("--comprobar", action="store_true",
+                        help="Comprueba qué hace falta instalar y termina")
     parser.add_argument("-o", "--salida", help="Ruta del informe (.md)")
     parser.add_argument("--remoto", action="store_true",
                         help="Envía el vídeo a OpenRouter. Por defecto todo es local.")
@@ -729,6 +782,12 @@ def main():
                         help="Umbral en dólares por encima del cual se pide confirmación")
     parser.add_argument("--si", action="store_true", help="No preguntar por el coste")
     args = parser.parse_args()
+
+    if args.comprobar:
+        sys.exit(comprobar_entorno())
+    if not args.fuente:
+        parser.error("hace falta una ruta de vídeo o una URL "
+                     "(o --comprobar para revisar el entorno)")
 
     requerir("ffmpeg")
     requerir("ffprobe")

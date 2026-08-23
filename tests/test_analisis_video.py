@@ -294,5 +294,33 @@ class NombreDeSalida(unittest.TestCase):
             self.assertEqual(av.titulo_descargado(t), "video")
 
 
+class ComprobacionDeEntorno(unittest.TestCase):
+    """--comprobar informa de lo que falta y nunca revela la clave."""
+
+    def test_detecta_lo_que_falta_y_no_instala(self):
+        salida = io.StringIO()
+        with mock.patch.object(av.shutil, "which", return_value=None), \
+             mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}), \
+             mock.patch.object(av, "ENV_PATH", "/no/existe/.env"), \
+             mock.patch("sys.stdout", salida):
+            codigo = av.comprobar_entorno()
+        texto = salida.getvalue()
+        self.assertEqual(codigo, 1)
+        for binario in ("ffmpeg", "ffprobe", "yt-dlp"):
+            self.assertIn(binario, texto)
+        self.assertIn("No se instala nada automáticamente", texto)
+
+    def test_no_imprime_el_valor_de_la_clave(self):
+        clave = "sk-or-v1-" + "d" * 64
+        salida = io.StringIO()
+        with mock.patch.object(av.shutil, "which", return_value="/usr/bin/x"), \
+             mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": clave}), \
+             mock.patch("sys.stdout", salida):
+            codigo = av.comprobar_entorno()
+        self.assertEqual(codigo, 0)
+        self.assertNotIn(clave, salida.getvalue())
+        self.assertIn("configurada", salida.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

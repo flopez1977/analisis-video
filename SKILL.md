@@ -36,6 +36,30 @@ material de cliente, y no cuesta dinero.
 dos terceros y espera su confirmación.** No es negociable aunque el usuario tenga
 prisa: puede ser material que no deba salir.
 
+## Antes de la primera ejecución
+
+Comprueba el entorno. Es rápido y evita que el usuario se estrelle a mitad de un análisis:
+
+```bash
+python3 ~/.claude/skills/analisis-video/scripts/analisis_video.py --comprobar
+```
+
+Devuelve qué hay y qué falta, y la orden exacta para instalar lo que falte.
+
+**Si falta algo, díselo al usuario y pregúntale antes de instalar nada.** Instalar
+software en la máquina de alguien es un cambio en su sistema: se propone, no se hace por
+las bravas. Explica en una línea para qué sirve cada cosa que falta:
+
+- **ffmpeg / ffprobe** — imprescindibles. Extraen los fotogramas, leen la duración y
+  comprimen el vídeo para poder enviarlo.
+- **yt-dlp** — solo si va a analizar enlaces. Con archivos locales no hace falta.
+- **La clave de OpenRouter** — solo para `--remoto`. En modo local no se usa.
+
+Si acepta, ejecuta la orden que haya indicado la comprobación. Si la instalación pide su
+contraseña, que la escriba él: tú no la pides ni la manejas.
+
+Si solo falta la clave y el usuario quiere modo local, no hay nada que instalar: adelante.
+
 ## Ejecutar
 
 ```bash
@@ -70,6 +94,8 @@ Ficha rápida · Estética y dirección · Ritmo y montaje · Transcripción ·
 Música y diseño sonoro · Desglose plano a plano · Texto en pantalla · Lectura narrativa.
 
 ## Requisitos
+
+Todo esto lo verifica `--comprobar`, así que no hace falta que lo compruebes a mano.
 
 - `ffmpeg` y `ffprobe` (`brew install ffmpeg`)
 - `yt-dlp` solo si se van a analizar URLs (`brew install yt-dlp`)

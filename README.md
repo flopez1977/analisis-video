@@ -129,6 +129,15 @@ brew install ffmpeg yt-dlp   # yt-dlp solo si vas a analizar URLs
 
 En Linux: `sudo apt install ffmpeg` y `pipx install yt-dlp`.
 
+Para saber qué te falta sin tener que adivinarlo:
+
+```bash
+python3 ~/.claude/skills/analisis-video/scripts/analisis_video.py --comprobar
+```
+
+Te dice qué hay, qué falta y la orden exacta para instalarlo. No instala nada por su
+cuenta.
+
 Las dos dependencias externas son proyectos de código abierto consolidados:
 
 - **[ffmpeg](https://ffmpeg.org)** ([descargas](https://ffmpeg.org/download.html)) — extrae
