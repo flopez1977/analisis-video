@@ -129,6 +129,13 @@ brew install ffmpeg yt-dlp   # yt-dlp solo si vas a analizar URLs
 
 En Linux: `sudo apt install ffmpeg` y `pipx install yt-dlp`.
 
+Las dos dependencias externas son proyectos de código abierto consolidados:
+
+- **[ffmpeg](https://ffmpeg.org)** ([descargas](https://ffmpeg.org/download.html)) — extrae
+  los fotogramas, lee la duración y comprime para el envío.
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — descarga desde una URL. Solo hace falta
+  si vas a analizar enlaces. Mantenlo actualizado (ver [SECURITY.md](SECURITY.md)).
+
 No hay instalador, ni hooks, ni servidores MCP. Son dos archivos: la skill y un script
 de Python que solo usa la biblioteca estándar.
 
