@@ -49,6 +49,9 @@ FOTOGRAMAS_POR_DEFECTO = 30
 SEGUNDOS_MAX_POR_ENVIO = 150
 SEGUNDOS_POR_TROZO = 120
 
+# Orden de preferencia al pedir y al elegir subtítulos.
+IDIOMAS_SUBTITULOS = ["es", "en"]
+
 MIME_POR_EXTENSION = {
     "mp4": "video/mp4",
     "mov": "video/quicktime",
@@ -114,12 +117,12 @@ def validar_url(url):
 
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast):
-            salir(
-                f"La URL apunta a una dirección interna ({ip}). "
-                "Bloqueado por seguridad."
-            )
+        # `is_global` es más completo que enumerar rangos a mano: cubre además
+        # CGNAT (100.64.0.0/10, donde vive por ejemplo Tailscale) y los rangos
+        # que se reserven en el futuro.
+        if not ip.is_global:
+            salir(f"La URL apunta a una dirección no pública ({ip}). "
+                  "Bloqueado por seguridad.")
     return url
 
 
@@ -128,9 +131,19 @@ def salir(mensaje):
     sys.exit(1)
 
 
-def requerir(binario, instalacion):
-    if not shutil.which(binario):
-        salir(f"{binario} no está instalado. Instálalo con: {instalacion}")
+COMO_INSTALAR = {
+    "ffmpeg": {"darwin": "brew install ffmpeg", "linux": "sudo apt install ffmpeg"},
+    "ffprobe": {"darwin": "brew install ffmpeg", "linux": "sudo apt install ffmpeg"},
+    "yt-dlp": {"darwin": "brew install yt-dlp", "linux": "pipx install yt-dlp"},
+}
+
+
+def requerir(binario):
+    if shutil.which(binario):
+        return
+    sistema = "darwin" if sys.platform == "darwin" else "linux"
+    orden = COMO_INSTALAR.get(binario, {}).get(sistema, f"instala {binario}")
+    salir(f"{binario} no está instalado. Instálalo con: {orden}")
 
 
 def cargar_clave():
@@ -174,14 +187,17 @@ def duracion_segundos(ruta):
          "-of", "default=noprint_wrappers=1:nokey=1", "--", ruta],
         "ffprobe (duración)",
     ).strip()
-    if not salida:
-        salir("No se pudo leer la duración del vídeo.")
-    return float(salida)
+    try:
+        return float(salida)
+    except ValueError:
+        # ffprobe devuelve "N/A" en flujos elementales (.h264, .ts truncados).
+        salir(f"No se pudo leer la duración de {os.path.basename(ruta)!r}. "
+              "¿Es un archivo de vídeo válido y completo?")
 
 
 def descargar(url, destino):
     """Descarga con yt-dlp a una carpeta de trabajo. Devuelve la ruta del vídeo."""
-    requerir("yt-dlp", "brew install yt-dlp")
+    requerir("yt-dlp")
     validar_url(url)
     print("Descargando vídeo...", file=sys.stderr)
     plantilla = os.path.join(destino, "video.%(ext)s")
@@ -189,7 +205,8 @@ def descargar(url, destino):
         ["yt-dlp",
          "--no-playlist",
          "--no-exec",
-         "--write-auto-subs", "--write-subs", "--sub-langs", "es,en",
+         "--write-auto-subs", "--write-subs",
+         "--sub-langs", ",".join(IDIOMAS_SUBTITULOS),
          "--write-info-json",
          "--merge-output-format", "mp4",
          "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
@@ -222,67 +239,99 @@ def titulo_descargado(carpeta):
     return limpio or "video"
 
 
-def comprimir(ruta, destino, nombre="comprimido.mp4"):
-    """Copia reducida para que quepa en el envío. No toca el original.
+# Escalones de calidad para que un fragmento quepa en el envío, de menos a más
+# agresivo: (ancho, fps, bitrate de audio, fracción del presupuesto).
+# Bajar los fps apenas cuesta calidad aquí, porque el modelo muestrea el vídeo en
+# torno a 1 fps y descarta los fotogramas intermedios de todas formas.
+ESCALONES = [
+    (1280, 24, 128_000, 1.00),
+    (1280, 12, 96_000, 0.85),
+    (960, 8, 64_000, 0.72),
+    (854, 6, 64_000, 0.61),
+    (640, 5, 48_000, 0.52),
+]
 
-    Cada escalón baja resolución y fotogramas por segundo, no solo el bitrate.
-    Con un suelo de bitrate, reintentar tocando solo el bitrate reencoda
-    exactamente lo mismo y el bucle no converge nunca.
 
-    Bajar los fps apenas cuesta calidad para este uso: el modelo muestrea el
-    vídeo en torno a 1 fps, así que los fotogramas de más se descartan igual.
-    Los bits ahorrados se gastan en nitidez, que sí se aprovecha.
+def _codificar(origen, salida, ancho, fps, bitrate_video, bitrate_audio,
+               inicio=None, segundos=None):
+    """Un pase de ffmpeg. Con `inicio` recorta además, con corte exacto.
+
+    `-ss` antes de `-i` busca rápido por keyframe, pero al recodificar ffmpeg
+    descarta lo que sobra hasta el instante pedido, así que el corte es exacto.
+    Eso importa: con copia de flujo el trozo empieza en el keyframe anterior, y
+    entonces el desfase que se le anuncia al modelo no es el real.
     """
-    requerir("ffmpeg", "brew install ffmpeg")
-    duracion = duracion_segundos(ruta)
-    salida = os.path.join(destino, nombre)
-    bitrate_audio = 64_000 if duracion > 120 else BITRATE_AUDIO
-    presupuesto = MAX_BYTES_CRUDOS * 8 * 0.9
+    orden = ["ffmpeg", "-y"]
+    if inicio is not None:
+        orden += ["-ss", f"{inicio:.3f}"]
+    orden += ["-i", origen]
+    if segundos is not None:
+        orden += ["-t", f"{segundos:.3f}"]
+    # x264 rechaza bufsize desmesurados en clips muy cortos.
+    maxrate = min(int(bitrate_video * 1.2), 50_000_000)
+    orden += [
+        "-vf", f"scale={ancho}:-2", "-r", str(fps),
+        "-c:v", "libx264", "-b:v", str(bitrate_video),
+        "-maxrate", str(maxrate), "-bufsize", str(min(bitrate_video * 2, 100_000_000)),
+        "-preset", "medium",
+        "-c:a", "aac", "-b:a", str(bitrate_audio), "-ac", "1",
+        "-hide_banner", "-loglevel", "error",
+        "--", salida,
+    ]
+    ejecutar(orden, "ffmpeg (codificación)")
 
-    for ancho, fps in [(1280, 24), (1280, 12), (960, 8), (854, 6), (640, 5)]:
+
+def _encodear_hasta_caber(origen, salida, duracion, inicio=None, segundos=None):
+    """Prueba escalones cada vez más agresivos hasta que el archivo quepa.
+
+    Cada escalón reduce a la vez resolución, fotogramas, audio y presupuesto.
+    Tocar solo el bitrate no basta: con un suelo de calidad, los reintentos
+    reencodean lo mismo una y otra vez y el bucle no converge nunca.
+    """
+    requerir("ffmpeg")
+    for ancho, fps, bitrate_audio, fraccion in ESCALONES:
+        presupuesto = MAX_BYTES_CRUDOS * 8 * 0.9 * fraccion
         bitrate = int(presupuesto / duracion) - bitrate_audio
         if bitrate < BITRATE_VIDEO_MINIMO:
             continue
-        ejecutar(
-            ["ffmpeg", "-y", "-i", ruta,
-             "-vf", f"scale={ancho}:-2", "-r", str(fps),
-             "-c:v", "libx264", "-b:v", str(bitrate),
-             "-maxrate", str(int(bitrate * 1.2)), "-bufsize", str(bitrate * 2),
-             "-preset", "medium",
-             "-c:a", "aac", "-b:a", str(bitrate_audio), "-ac", "1",
-             "-hide_banner", "-loglevel", "error",
-             "--", salida],
-            "ffmpeg (compresión)",
-        )
+        _codificar(origen, salida, ancho, fps, bitrate, bitrate_audio, inicio, segundos)
         if os.path.getsize(salida) <= MAX_BYTES_CRUDOS:
             return salida
+    salir("No se pudo reducir el vídeo por debajo del límite de envío sin "
+          "destrozar la imagen. Recórtalo o usa el modo local (sin --remoto).")
 
-    salir("No se pudo reducir el vídeo por debajo del límite de envío. "
-          "Trocéalo o usa el modo local (sin --remoto).")
 
+def comprimir(ruta, destino, nombre="comprimido.mp4"):
+    """Copia reducida del vídeo entero para que quepa en el envío.
 
-def trocear(ruta, destino, segundos):
-    """Parte el vídeo por copia de flujo, sin recodificar.
-
-    Devuelve [(segundo_de_inicio, ruta_del_trozo), ...].
+    No toca el original.
     """
-    duracion = duracion_segundos(ruta)
-    trozos, inicio, indice = [], 0.0, 0
-    while inicio < duracion - 1:
-        fragmento = os.path.join(destino, f"trozo_{indice:02d}.mp4")
-        subprocess.run(
-            ["ffmpeg", "-y", "-ss", f"{inicio:.2f}", "-i", ruta,
-             "-t", str(segundos), "-c", "copy", "-avoid_negative_ts", "make_zero",
-             "-hide_banner", "-loglevel", "error", "--", fragmento],
-            capture_output=True,
-        )
-        if os.path.exists(fragmento) and os.path.getsize(fragmento) > 0:
-            trozos.append((inicio, fragmento))
-        inicio += segundos
-        indice += 1
-    if not trozos:
-        salir("No se pudo trocear el vídeo.")
-    return trozos
+    salida = os.path.join(destino, nombre)
+    return _encodear_hasta_caber(ruta, salida, duracion_segundos(ruta))
+
+
+def plan_de_trozos(duracion, segundos_por_trozo):
+    """Reparte la duración en tramos consecutivos que la cubren entera.
+
+    Devuelve [(inicio, duracion_del_tramo), ...]. El último tramo llega hasta el
+    final: recortar por un umbral fijo dejaría fuera la cola, que es justo donde
+    suele estar el cierre de marca.
+    """
+    tramos, inicio = [], 0.0
+    while inicio < duracion:
+        tramo = min(segundos_por_trozo, duracion - inicio)
+        if tramo < 0.2:  # resto inservible por redondeo
+            break
+        tramos.append((inicio, tramo))
+        inicio += segundos_por_trozo
+    return tramos
+
+
+def preparar_fragmento(ruta, destino, inicio, segundos, indice):
+    """Recorta un fragmento exacto y lo deja listo para enviar, en un solo pase."""
+    salida = os.path.join(destino, f"fragmento_{indice:02d}.mp4")
+    return _encodear_hasta_caber(ruta, salida, segundos, inicio=inicio,
+                                 segundos=segundos)
 
 
 # --------------------------------------------------------------------------
@@ -299,13 +348,15 @@ def marca_tiempo(segundos):
 
 def extraer_fotogramas(ruta, carpeta, cuantos):
     """Fotogramas repartidos uniformemente, nombrados con su marca de tiempo."""
-    requerir("ffmpeg", "brew install ffmpeg")
+    requerir("ffmpeg")
     duracion = duracion_segundos(ruta)
-    # Se parte de cero: fotogramas de una ejecución anterior confundirían al
-    # lector del informe, que los vería mezclados con los nuevos.
-    if os.path.isdir(carpeta):
-        shutil.rmtree(carpeta)
-    os.makedirs(carpeta)
+    # Se limpian solo los archivos que genera esta herramienta. La carpeta se
+    # deriva del nombre de salida, así que puede coincidir con una del usuario:
+    # borrarla entera destruiría datos ajenos sin previo aviso.
+    os.makedirs(carpeta, exist_ok=True)
+    for antiguo in os.listdir(carpeta):
+        if re.fullmatch(r"frame_\d{3}_.+\.jpg", antiguo) or antiguo == "audio.m4a":
+            os.remove(os.path.join(carpeta, antiguo))
 
     # Se evita el segundo 0 exacto y el final, donde suele haber negros.
     paso = duracion / (cuantos + 1)
@@ -325,6 +376,11 @@ def extraer_fotogramas(ruta, carpeta, cuantos):
             fotogramas.append((instante, destino))
         print(f"\rFotogramas: {len(fotogramas)}/{cuantos}", end="", file=sys.stderr)
     print("", file=sys.stderr)
+    if not fotogramas:
+        salir("ffmpeg no pudo extraer ningún fotograma. ¿El archivo está completo?")
+    if len(fotogramas) < cuantos:
+        print(f"Aviso: solo se extrajeron {len(fotogramas)} de {cuantos} fotogramas.",
+              file=sys.stderr)
     return duracion, fotogramas
 
 
@@ -348,7 +404,16 @@ def subtitulos_a_texto(carpeta_descarga):
     if not vtts:
         return None
 
-    with open(os.path.join(carpeta_descarga, sorted(vtts)[0]), encoding="utf-8",
+    # Se respeta el orden de preferencia de la descarga: ordenar alfabéticamente
+    # haría ganar siempre al inglés cuando hay .en.vtt y .es.vtt.
+    def preferencia(nombre):
+        for posicion, idioma in enumerate(IDIOMAS_SUBTITULOS):
+            if f".{idioma}." in nombre:
+                return (posicion, nombre)
+        return (len(IDIOMAS_SUBTITULOS), nombre)
+
+    elegido = sorted(vtts, key=preferencia)[0]
+    with open(os.path.join(carpeta_descarga, elegido), encoding="utf-8",
               errors="replace") as f:
         contenido = f.read()
 
@@ -478,7 +543,14 @@ def precios_del_modelo(modelo):
 def confirmar_coste(duracion, modelo, umbral, asumir_si):
     precio_entrada, precio_salida = precios_del_modelo(modelo)
     if precio_entrada is None:
-        print(f"Modelo {modelo}: no se pudo consultar el precio.", file=sys.stderr)
+        # Sin precio no se puede estimar, así que se pregunta. Continuar en
+        # silencio dejaría al usuario pagando un envío que no ha aprobado.
+        print(f"No se pudo consultar el precio de {modelo}.", file=sys.stderr)
+        if asumir_si:
+            return
+        respuesta = input("No puedo estimar el coste. ¿Continuar igualmente? [s/N] ")
+        if respuesta.strip().lower() not in ("s", "si", "sí"):
+            salir("Cancelado por el usuario.")
         return
 
     tokens_entrada = duracion * TOKENS_POR_SEGUNDO_VIDEO
@@ -535,6 +607,10 @@ def preguntar_al_modelo(ruta, modelo, clave, prompt):
         salir(f"HTTP {e.code}: {sanear(detalle, clave)[:1000]}")
     except urllib.error.URLError as e:
         salir(f"Fallo de red: {sanear(e, clave)}")
+    except TimeoutError:
+        salir("La petición agotó el tiempo de espera. Prueba con un vídeo más corto.")
+    except json.JSONDecodeError:
+        salir("La API devolvió una respuesta que no es JSON.")
 
     if "error" in cuerpo:
         salir(f"La API devolvió un error: {sanear(cuerpo['error'], clave)}")
@@ -580,33 +656,48 @@ def analizar_remoto(ruta, destino_informe, modelo, clave, trabajo):
             f.write(CABECERA + texto)
         return destino_informe
 
-    trozos = trocear(ruta, trabajo, SEGUNDOS_POR_TROZO)
-    print(f"{marca_tiempo(duracion)} de vídeo: se analiza en {len(trozos)} partes "
-          f"de {SEGUNDOS_POR_TROZO}s para no perder calidad al comprimir.",
+    tramos = plan_de_trozos(duracion, SEGUNDOS_POR_TROZO)
+    print(f"{marca_tiempo(duracion)} de vídeo: se analiza en {len(tramos)} partes "
+          f"de hasta {SEGUNDOS_POR_TROZO}s para no perder calidad al comprimir.",
           file=sys.stderr)
 
     partes, coste_total, entrada_total, salida_total = [], 0.0, 0, 0
-    for indice, (inicio, fragmento) in enumerate(trozos, 1):
-        etiqueta = f"[parte {indice}/{len(trozos)}] "
-        a_enviar = fragmento
-        if os.path.getsize(fragmento) > MAX_BYTES_CRUDOS:
-            a_enviar = comprimir(fragmento, trabajo, f"comprimido_{indice:02d}.mp4")
-        print(f"{etiqueta}enviando (desde {marca_tiempo(inicio)})...", file=sys.stderr)
-        texto, entrada, salida_tok = preguntar_al_modelo(
-            a_enviar, modelo, clave, prompt_con_desfase(inicio, duracion))
+
+    def volcar():
+        """Guarda lo analizado hasta ahora.
+
+        Se llama tras cada parte para que un fallo a media tanda no tire a la
+        basura los envíos que ya se han pagado.
+        """
+        aviso = (f"> Vídeo de {marca_tiempo(duracion)} analizado en "
+                 f"{len(partes)} de {len(tramos)} partes. Las marcas de tiempo "
+                 "son globales respecto al vídeo completo.\n\n")
+        with open(destino_informe, "w", encoding="utf-8") as f:
+            f.write(CABECERA + aviso + "\n\n---\n\n".join(partes))
+
+    for indice, (inicio, segundos) in enumerate(tramos, 1):
+        etiqueta = f"[parte {indice}/{len(tramos)}] "
+        print(f"{etiqueta}preparando fragmento desde {marca_tiempo(inicio)}...",
+              file=sys.stderr)
+        fragmento = preparar_fragmento(ruta, trabajo, inicio, segundos, indice)
+        try:
+            texto, entrada, salida_tok = preguntar_al_modelo(
+                fragmento, modelo, clave, prompt_con_desfase(inicio, duracion))
+        except SystemExit:
+            if partes:
+                volcar()
+                print(f"Falló la parte {indice}. Se conservan las {len(partes)} "
+                      f"partes ya analizadas en {destino_informe}", file=sys.stderr)
+            raise
         coste_total += informar_coste(modelo, entrada, salida_tok, etiqueta)
         entrada_total += entrada
         salida_total += salida_tok
-        partes.append(f"# Parte {indice} de {len(trozos)} "
+        partes.append(f"# Parte {indice} de {len(tramos)} "
                       f"({marca_tiempo(inicio)} en adelante)\n\n{texto}")
+        volcar()
 
     print(f"TOTAL: {entrada_total} entrada / {salida_total} salida "
           f"— coste real ${coste_total:.4f}", file=sys.stderr)
-    aviso = (f"> Vídeo de {marca_tiempo(duracion)} analizado en {len(trozos)} partes. "
-             "Las marcas de tiempo de cada parte son globales respecto al vídeo "
-             "completo.\n\n")
-    with open(destino_informe, "w", encoding="utf-8") as f:
-        f.write(CABECERA + aviso + "\n\n---\n\n".join(partes))
     return destino_informe
 
 
@@ -627,8 +718,8 @@ def main():
     parser.add_argument("--si", action="store_true", help="No preguntar por el coste")
     args = parser.parse_args()
 
-    requerir("ffmpeg", "brew install ffmpeg")
-    requerir("ffprobe", "brew install ffmpeg")
+    requerir("ffmpeg")
+    requerir("ffprobe")
 
     with tempfile.TemporaryDirectory(prefix="analisis-video-") as trabajo:
         carpeta_descarga = None
