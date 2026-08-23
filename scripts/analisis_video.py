@@ -236,7 +236,7 @@ def comprimir(ruta, destino, nombre="comprimido.mp4"):
     requerir("ffmpeg", "brew install ffmpeg")
     duracion = duracion_segundos(ruta)
     salida = os.path.join(destino, nombre)
-    bitrate_audio = 64_000 if duracion > 120 else AUDIO_BITRATE
+    bitrate_audio = 64_000 if duracion > 120 else BITRATE_AUDIO
     presupuesto = MAX_BYTES_CRUDOS * 8 * 0.9
 
     for ancho, fps in [(1280, 24), (1280, 12), (960, 8), (854, 6), (640, 5)]:
