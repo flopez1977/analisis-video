@@ -523,20 +523,32 @@ def prompt_con_desfase(inicio, duracion_total):
     ) + PROMPT
 
 
+_CACHE_PRECIOS = {}
+
+
 def precios_del_modelo(modelo):
-    """Lee el precio real de OpenRouter en vez de fiarlo a una constante."""
+    """Lee el precio real de OpenRouter en vez de fiarlo a una constante.
+
+    Se cachea: en un vídeo troceado esto se consulta una vez por parte, y un
+    fallo puntual de red haría que el coste total se reportara por lo bajo.
+    """
+    if modelo in _CACHE_PRECIOS:
+        return _CACHE_PRECIOS[modelo]
     try:
         with urllib.request.urlopen(MODELS_URL, timeout=20) as respuesta:
             catalogo = json.loads(respuesta.read().decode("utf-8"))["data"]
     except Exception:
-        return None, None
+        return None, None  # no se cachea: puede ser un fallo de red puntual
     for entrada in catalogo:
         if entrada.get("id") == modelo:
             precios = entrada.get("pricing", {})
             try:
-                return float(precios["prompt"]), float(precios["completion"])
+                par = float(precios["prompt"]), float(precios["completion"])
             except (KeyError, TypeError, ValueError):
-                return None, None
+                par = (None, None)
+            _CACHE_PRECIOS[modelo] = par
+            return par
+    _CACHE_PRECIOS[modelo] = (None, None)  # el modelo no existe en el catálogo
     return None, None
 
 
