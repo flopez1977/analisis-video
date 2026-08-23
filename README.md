@@ -109,7 +109,7 @@ Hacen cosas distintas y se complementan:
 | Qué entrega | Fotogramas y transcripción al asistente | Un informe estructurado del montaje |
 | Quién analiza | El asistente, mirando imágenes sueltas | Un modelo multimodal, viendo el vídeo continuo con audio |
 | Pregunta que responde | *¿Qué se dice y qué sale?* | *¿Cómo está construido?* |
-| Cortes, ritmo, transiciones | No: no están en un fotograma | Sí |
+| Cortes, ritmo, transiciones | No: no están en un fotograma | Sí. Cuántos planos y de qué duración salen ya del modo local, con ffmpeg y a coste cero; el tipo de transición, solo del remoto |
 | Movimiento de cámara | No | Sí |
 | Música y efectos de sonido | Transcribe voz, no describe el diseño sonoro | Sí |
 | Coste | Gratis (o el de Whisper) | Céntimos por vídeo |
@@ -260,16 +260,30 @@ El mismo spot de Monster Energy (0:13) analizado de las dos maneras:
 | Paleta, iluminación, óptica | ✅ | ✅ |
 | Encuadre y composición | ✅ | ✅ |
 | Texto en pantalla | ✅ | ✅ |
-| Número de planos y ritmo | ❌ 16 fotogramas no revelan que haya 7 cortes | ✅ 7 planos, ~1,8 s/plano |
+| Número de planos y ritmo | ⚠️ Los 16 fotogramas no lo revelan, pero el detector de cortes de ffmpeg sí: aproximado, gratis | ✅ 7 planos, ~1,8 s/plano |
 | Movimiento de cámara | ❌ Una instantánea no tiene movimiento | ✅ |
 | Tipo de transición entre planos | ❌ | ✅ |
 | Música y efectos de sonido | ❌ No oye nada | ✅ Identificó el trap instrumental y el sonido de apertura de la lata |
 | Coste | Gratis | $0.0054 |
 
-**Si lo que te interesa es el montaje —cortes, transiciones, ritmo, sincronía con la
-música—, el modo local no te sirve: ve fotos, no vídeo.** El modo local es la opción
-correcta cuando el material no puede salir de tu máquina, o cuando lo que buscas es
-composición, color y contenido de plano.
+**Si lo que te interesa es el montaje fino —tipo de transición, movimiento de cámara,
+sincronía con la música—, el modo local no te sirve: ve fotos, no vídeo.** Lo que sí
+te da gratis es la arquitectura del corte: cuántos planos hay y cuánto dura cada uno,
+detectado con ffmpeg. El modo local es la opción correcta cuando el material no puede
+salir de tu máquina, o cuando lo que buscas es composición, color y contenido de plano.
+
+### El detector de cortes falla en las dos direcciones
+
+Medido contra vídeos de verdad conocida, y conviene saberlo antes de citar la cifra:
+
+- **Pierde cortes** entre planos de color plano o muy parecidos entre sí. Bajar el
+  umbral no lo arregla: solo añade falsos positivos en el resto del vídeo.
+- **Inventa cortes** donde hay movimiento caótico: cámara en mano, estroboscopio,
+  transiciones rápidas.
+
+Sirve como primera lectura del montaje. Para una cifra que vayas a defender ante un
+cliente, cuenta los planos a mano o usa el modo remoto.
+
 
 ### Para qué sirve esto
 

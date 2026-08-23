@@ -322,5 +322,73 @@ class ComprobacionDeEntorno(unittest.TestCase):
         self.assertIn("configurada", salida.getvalue())
 
 
+
+
+def video_con_tomas(destino, tomas=("testsrc", "smptebars", "testsrc2"), segundos=3):
+    """Vídeo con cortes duros conocidos: cada toma dura `segundos`."""
+    ruta = os.path.join(destino, f"tomas_{len(tomas)}_{segundos}.mp4")
+    orden = ["ffmpeg", "-y"]
+    for fuente in tomas:
+        orden += ["-f", "lavfi", "-i",
+                  f"{fuente}=duration={segundos}:size=320x180:rate=25"]
+    entradas = "".join(f"[{i}:v]" for i in range(len(tomas)))
+    orden += ["-filter_complex", f"{entradas}concat=n={len(tomas)}:v=1:a=0",
+              "-c:v", "libx264", "-pix_fmt", "yuv420p",
+              "-hide_banner", "-loglevel", "error", ruta]
+    subprocess.run(orden, check=True)
+    return ruta
+
+
+class DeteccionDeCortes(unittest.TestCase):
+    """Los cortes salen de ffmpeg, sin coste y sin enviar el vídeo a nadie."""
+
+    def test_parsea_los_instantes_de_la_salida_de_ffmpeg(self):
+        salida = (
+            "frame:75   pts:75      pts_time:3.0\n"
+            "lavfi.scene_score=0.812345\n"
+            "frame:150  pts:150     pts_time:6.04\n"
+            "lavfi.scene_score=0.734567\n"
+        )
+        self.assertEqual(av.parsear_cortes(salida), [3.0, 6.04])
+
+    def test_sin_cortes_devuelve_lista_vacia(self):
+        self.assertEqual(av.parsear_cortes(""), [])
+
+    def test_detecta_los_cortes_de_un_video_de_tres_tomas(self):
+        with tempfile.TemporaryDirectory() as t:
+            ruta = video_con_tomas(t)
+            cortes = av.detectar_cortes(ruta)
+            self.assertEqual(len(cortes), 2,
+                             f"esperaba 2 cortes, encontró {cortes}")
+            self.assertAlmostEqual(cortes[0], 3.0, delta=0.3)
+            self.assertAlmostEqual(cortes[1], 6.0, delta=0.3)
+
+    def test_los_planos_cubren_la_duracion_entera(self):
+        planos = av.planos_desde_cortes([3.0, 6.0], duracion=9.0)
+        self.assertEqual(len(planos), 3)
+        self.assertEqual(planos[0], (0.0, 3.0))
+        self.assertEqual(planos[-1], (6.0, 9.0))
+
+    def test_un_video_sin_cortes_es_un_solo_plano(self):
+        self.assertEqual(av.planos_desde_cortes([], duracion=5.0), [(0.0, 5.0)])
+
+    def test_descarta_cortes_posteriores_al_final(self):
+        """Un falso positivo en el último fotograma no crea un plano de 0 s."""
+        self.assertEqual(av.planos_desde_cortes([4.99], duracion=5.0),
+                         [(0.0, 5.0)])
+
+    def test_el_informe_local_lista_los_planos_y_avisa_de_que_falla(self):
+        with tempfile.TemporaryDirectory() as t:
+            ruta = video_con_tomas(t)
+            informe = os.path.join(t, "informe.md")
+            av.analizar_local(ruta, informe, cuantos=2)
+            with open(informe, encoding="utf-8") as f:
+                texto = f.read()
+            self.assertIn("## Planos", texto)
+            self.assertIn("Planos detectados: 3", texto)
+            self.assertIn("color plano", texto,
+                          "el informe no advierte de cuándo falla el detector")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

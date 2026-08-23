@@ -19,10 +19,11 @@ una ruta local como una URL.
 
 | | Local (por defecto) | Remoto (`--remoto`) |
 |---|---|---|
-| Qué hace | Extrae fotogramas y audio con ffmpeg. **Tú miras los fotogramas.** | Envía el vídeo a un modelo multimodal, que devuelve el informe escrito. |
+| Qué hace | Extrae fotogramas, audio y el corte de planos con ffmpeg. **Tú miras los fotogramas.** | Envía el vídeo a un modelo multimodal, que devuelve el informe escrito. |
 | Privacidad | El vídeo no sale de la máquina. | El vídeo pasa por OpenRouter y por el proveedor del modelo. |
 | Coste | Cero. | Se paga por tokens. |
 | Continuidad | Ve instantes sueltos, no el movimiento entre ellos. | Ve el vídeo completo, con audio. |
+| Montaje | Cuántos planos y de qué duración, con margen de error. | Además: tipo de corte, transición y sincronía con la música. |
 
 **Los enlaces funcionan en los dos modos.** El origen (archivo o URL) y el modo
 (local o remoto) son independientes: `--remoto` no decide de dónde viene el vídeo,

@@ -396,6 +396,40 @@ def extraer_audio(ruta, carpeta):
     return destino
 
 
+# Por debajo de este umbral de puntuación de escena, ffmpeg no considera que
+# haya corte. 0.3 es el compromiso que mejor se portó en las pruebas: bajarlo
+# multiplica los falsos positivos en planos con movimiento.
+UMBRAL_CORTE = 0.3
+
+# Un corte que deja una cola más corta que esto casi siempre es un falso
+# positivo del último fotograma (fundido a negro, logotipo final).
+PLANO_MINIMO = 0.5
+
+
+def parsear_cortes(salida):
+    """Instantes (en segundos) que ffmpeg marcó como cambio de escena."""
+    return [float(m) for m in re.findall(r"pts_time:([\d.]+)", salida)]
+
+
+def detectar_cortes(ruta, umbral=UMBRAL_CORTE):
+    """Detecta los cortes con ffmpeg. Coste cero y sin salir de la máquina."""
+    requerir("ffmpeg")
+    resultado = subprocess.run(
+        ["ffmpeg", "-i", ruta, "-an",
+         "-filter_complex", f"select='gt(scene,{umbral})',metadata=print:file=-",
+         "-f", "null", "-hide_banner", "-loglevel", "error", "-"],
+        capture_output=True, text=True,
+    )
+    return parsear_cortes(resultado.stdout)
+
+
+def planos_desde_cortes(cortes, duracion):
+    """Convierte una lista de cortes en tramos (inicio, fin) que cubren el vídeo."""
+    validos = sorted(c for c in cortes if 0 < c < duracion - PLANO_MINIMO)
+    limites = [0.0] + validos + [duracion]
+    return [(limites[i], limites[i + 1]) for i in range(len(limites) - 1)]
+
+
 def subtitulos_a_texto(carpeta_descarga):
     """Convierte el .vtt que deja yt-dlp en texto plano con marcas de tiempo."""
     if not carpeta_descarga or not os.path.isdir(carpeta_descarga):
@@ -435,6 +469,7 @@ def analizar_local(ruta, destino_informe, cuantos, carpeta_descarga=None):
 
     duracion, fotogramas = extraer_fotogramas(ruta, carpeta_frames, cuantos)
     audio = extraer_audio(ruta, carpeta_frames)
+    planos = planos_desde_cortes(detectar_cortes(ruta), duracion)
     transcripcion = subtitulos_a_texto(carpeta_descarga)
 
     lineas = [
@@ -444,6 +479,7 @@ def analizar_local(ruta, destino_informe, cuantos, carpeta_descarga=None):
         "",
         f"- Duración: {marca_tiempo(duracion)} ({duracion:.1f} s)",
         f"- Fotogramas extraídos: {len(fotogramas)}",
+        f"- Planos detectados: {len(planos)}",
         f"- Carpeta de fotogramas: `{carpeta_frames}`",
     ]
     if audio:
@@ -453,6 +489,23 @@ def analizar_local(ruta, destino_informe, cuantos, carpeta_descarga=None):
     lineas += ["", "## Fotogramas", ""]
     for instante, ruta_frame in fotogramas:
         lineas.append(f"- `{marca_tiempo(instante)}` → `{ruta_frame}`")
+
+    medio = duracion / len(planos)
+    lineas += [
+        "", "## Planos", "",
+        f"Planos detectados: {len(planos)} · duración media {medio:.1f} s.",
+        "",
+        "> Los cortes los detecta ffmpeg comparando fotogramas consecutivos, y se "
+        "equivoca en las dos direcciones: **pierde cortes entre planos de color "
+        "plano o muy parecidos entre sí** (bajar el umbral no lo arregla, solo "
+        "añade falsos positivos) e **inventa cortes donde hay movimiento caótico** "
+        "—cámara en mano, estroboscopio, transiciones rápidas—. Trátalo como una "
+        "primera lectura del montaje, no como una cifra verificada.",
+        "",
+    ]
+    for i, (inicio, fin) in enumerate(planos, 1):
+        lineas.append(f"- Plano {i:02d}: `{marca_tiempo(inicio)}` → "
+                      f"`{marca_tiempo(fin)}` ({fin - inicio:.1f} s)")
 
     lineas += ["", "## Transcripción", ""]
     if transcripcion:
